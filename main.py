@@ -8,7 +8,7 @@ with open("config.json", "r") as f:
 intents = discord.Intents.default()
 client  = discord.Client(intents=intents)
 
-runner = ScriptCord(client, "command_ex.sc")
+runner = ScriptCord(client, "ex.sc")
 
 @client.event
 async def on_ready():

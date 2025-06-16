@@ -1,40 +1,51 @@
 import discord
 
+class Data:
+    def __init__(self):
+        self.global_vars = {}
+        self.local_vars = {}
+        self.embeds = {}
+        self.message_channel_map = {}
+
 class Interpreter:
     def __init__(self, client):
-        self.client               = client
-        self.embeds               = {}
-        self.script_type          = None
-        self.global_vars          = {}
-        self.message_channel_map  = {}
+        self.client = client
+        self.data = Data()
+        self.script_type = None
 
-    def load_script(self, parsed_commands):
-        if not parsed_commands or parsed_commands[0]["type"] != "config":
+    def load_script(self, nodes):
+        if not nodes or nodes[0]["type"] != "config":
             raise ValueError("First instruction must be 'config'.")
-        self.script_type = parsed_commands[0]["name"]
-        required = ["GUILD"] if self.script_type=="DEFAULT" else ["COMMAND_NAME","DESCRIPTION","ALIASES","GUILD"]
-        for var in required:
-            found = next((c for c in parsed_commands if c["type"]=="set" and c["name"]==var), None)
-            if found:
-                self.global_vars[var] = found["value"]
-            elif var=="GUILD":
-                self.global_vars["GUILD"] = None
+        self.script_type = nodes[0]["name"]
+        for n in nodes:
+            if n["type"] == "set" and n["scope"] == "global":
+                self.data.global_vars[n["name"]] = n["value"]
 
-    async def execute(self, parsed_commands):
-        self.load_script(parsed_commands)
-
-        # pick or auto-detect guild
-        if self.global_vars["GUILD"]:
-            gid   = int(self.global_vars["GUILD"])
+    async def execute(self, nodes):
+        self.load_script(nodes)
+        if "GUILD" in self.data.global_vars and self.data.global_vars["GUILD"] is not None:
+            gid = int(self._resolve(self.data.global_vars["GUILD"]))
             guild = self.client.get_guild(gid)
         else:
             guild = self.client.guilds[0]
-            self.global_vars["GUILD"] = str(guild.id)
+            self.data.global_vars["GUILD"] = {"kind": "number", "value": str(guild.id)}
+        for n in nodes[1:]:
+            if n["type"] == "set" and n["scope"] == "local":
+                self.data.local_vars[n["name"]] = n["value"]
+            elif n["type"] != "set":
+                await getattr(self, f"handle_{n['type']}")(n, guild)
 
-        for cmd in parsed_commands[1:]:
-            h = getattr(self, f"handle_{cmd['type']}", None)
-            if h:
-                await h(cmd, guild)
+    def _resolve(self, val):
+        if isinstance(val, dict):
+            if val["kind"] == "var":
+                name = val["value"]
+                if name in self.data.local_vars:
+                    return self.data.local_vars[name]["value"]
+                if name in self.data.global_vars:
+                    return self.data.global_vars[name]["value"]
+                raise ValueError(f"Unknown var: {name}")
+            return val["value"]
+        return val
 
     async def get_channel(self, channel_id):
         cid = int(channel_id)
@@ -44,56 +55,63 @@ class Interpreter:
                 return ch
         raise ValueError(f"Channel {cid} not found.")
 
-    async def handle_send(self, command, guild):
-        ch  = await self.get_channel(command["channel_id"])
-        msg = await ch.send(command["message"])
-        self.message_channel_map[msg.id] = ch.id
-
-    async def handle_react(self, command, guild):
-        mid = int(command["message_id"])
-        cid = self.message_channel_map.get(mid)
-        if not cid:
-            raise ValueError(f"Don’t know channel for message {mid}.")
+    async def handle_send(self, n, guild):
+        msg = self._resolve(n["message"])
+        cid = self._resolve(n["channel"])
         ch = await self.get_channel(cid)
-        msg = await ch.fetch_message(mid)
-        await msg.add_reaction(command["emoji"])
+        m = await ch.send(msg)
+        self.data.message_channel_map[m.id] = ch.id
 
-    async def handle_role(self, command, guild):
-        m = guild.get_member(int(command["member"]))
-        r = guild.get_role(int(command["role"]))
-        if command["function"]=="add":
+    async def handle_react(self, n, guild):
+        mid = int(self._resolve(n["message"]))
+        cid = self.data.message_channel_map.get(mid)
+        if cid is None:
+            raise ValueError(f"Unknown message {mid}")
+        ch = await self.get_channel(cid)
+        m = await ch.fetch_message(mid)
+        await m.add_reaction(n["emoji"])
+
+    async def handle_role(self, n, guild):
+        m = guild.get_member(int(self._resolve(n["member"])))
+        r = guild.get_role(int(self._resolve(n["role"])))
+        if n["function"] == "add":
             await m.add_roles(r)
         else:
             await m.remove_roles(r)
 
-    async def handle_embed(self, command, guild):
-        name, fn = command["name"], command["function"]
-        if fn=="create":
-            self.embeds[name] = discord.Embed(); return
-
-        if name not in self.embeds:
-            raise ValueError(f"Embed '{name}' not created.")
-        e = self.embeds[name]
-
-        if fn=="conf":
-            e.title       = command["title"]
-            e.url         = command["url"]
-            e.description = command["desc"]
-            c = command["color"].lstrip("#")
-            e.color       = discord.Color(int(c,16))
-        elif fn=="set_author":
-            e.set_author(name=command["author_name"],
-                         url=command["author_url"],
-                         icon_url=command["author_icon"])
-        elif fn=="set_thumbails":
-            e.set_thumbnail(url=command["thumbnail_url"])
-        elif fn in ("add_l","add_nl"):
-            e.add_field(name=command["title"],
-                        value=command["value"],
-                        inline=command["inline"])
-        elif fn=="set_footer":
-            e.set_footer(text=command["footer_text"])
-        elif fn=="send":
-            ch = await self.get_channel(command["channel_id"])
-            sent = await ch.send(embed=e)
-            del self.embeds[name]
+    async def handle_embed(self, n, guild):
+        buf = n["name"]
+        fn = n["function"]
+        if fn == "create":
+            self.data.embeds[buf] = discord.Embed()
+            return
+        e = self.data.embeds.get(buf)
+        if e is None:
+            raise ValueError(f"Embed '{buf}' not created.")
+        if fn == "conf":
+            e.title = self._resolve(n["title"])
+            e.url = self._resolve(n["url"])
+            e.description = self._resolve(n["desc"])
+            c = self._resolve(n["color"]).lstrip("#")
+            e.color = discord.Color(int(c, 16))
+        elif fn == "set_author":
+            e.set_author(
+                name=self._resolve(n["author_name"]),
+                url=self._resolve(n["author_url"]),
+                icon_url=self._resolve(n["author_icon"])
+            )
+        elif fn == "set_thumbnails":
+            e.set_thumbnail(url=self._resolve(n["thumbnail_url"]))
+        elif fn in ("add_l", "add_nl"):
+            e.add_field(
+                name=self._resolve(n["title"]),
+                value=self._resolve(n["value"]),
+                inline=n["inline"]
+            )
+        elif fn == "set_footer":
+            e.set_footer(text=self._resolve(n["footer_text"]))
+        elif fn == "send":
+            cid = self._resolve(n["channel"])
+            ch = await self.get_channel(cid)
+            await ch.send(embed=e)
+            del self.data.embeds[buf]

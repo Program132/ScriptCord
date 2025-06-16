@@ -114,9 +114,9 @@ embed:conf myEmbed "Title" "https://..." "Description" "#1abc9c"
 ```
 embed:set_author myEmbed "Bot Name" "https://..." "https://.../icon.png"
 ```
-- (Optional) Set thumbnail:
+- (Optional) Set thumbnails:
 ```
-embed:set_thumbails myEmbed "https://.../thumb.png"
+embed:set_thumbnails myEmbed "https://.../thumb.png"
 ```
 - Add fields, inline or block:
 ```
@@ -131,6 +131,23 @@ embed:set_footer myEmbed "Footer text here"
 ```
 embed:send myEmbed 987654321098765432
 ```
+
+##  Declare & Use local variables
+
+``` 
+setl myLocalVar "The value of my local var"
+```
+Example:
+```
+config DEFAULT
+set GUILD 1269814367105454174
+
+setl msgContent "Hi, how are you?"
+setl id_channel 1383949031377600532
+
+send msgContent 1383949031377600532
+```
+
 
 ## 🎯 What ScriptCord Handles
 - Auto-detect server & channel from any guild your bot is in.

@@ -76,153 +76,105 @@ class Parser:
             "name": conf.value
         }
 
+    def _parse_value(self, what):
+        t = self.current
+        if t.type == TokenType.STRING:
+            tok = self.expect(TokenType.STRING, f"{what} (string) expected")
+            return {"kind": "string", "value": tok.value}
+
+        if t.type == TokenType.NUMBER:
+            tok = self.expect(TokenType.NUMBER, f"{what} (number) expected")
+            return {"kind": "number", "value": tok.value}
+
+        if t.type == TokenType.IDENTIFIANT:
+            tok = self.expect(TokenType.IDENTIFIANT, f"{what} (var name) expected")
+            return {"kind": "var", "value": tok.value}
+
+        raise ParseError(f"{what} not recognized, got {t}")
+
     def set_INSTRUCTION(self):
-        var = self.expect(TokenType.IDENTIFIANT, "Variable globale attendue après `set`")
-
-        if self.current.type == TokenType.STRING:
-            val = self.expect(TokenType.STRING, "Chaîne attendue après nom de variable")
-        elif self.current.type == TokenType.NUMBER:
-            val = self.expect(TokenType.NUMBER, "Nombre attendu après nom de variable")
-        else:
-            raise ParseError(f"Unexpected value type for variable `{var.value}`, got {self.current}")
-
-        return {
-            "type": "set",
-            "name": var.value,
-            "value": val.value
-        }
+        var = self.expect(TokenType.IDENTIFIANT, "Expected global var name after `set`")
+        val = self._parse_value("global variable")
+        return { "type":"set", "scope":"global", "name":var.value, "value":val }
 
     def setl_INSTRUCTION(self):
-        var = self.expect(TokenType.IDENTIFIANT, "Variable local attendue après `set`")
-        val = self.expect(TokenType.STRING, "Chaîne attendue après nom de variable")
-        return {
-            "type": "set",
-            "name": var.value,
-            "value": val.value
-        }
+        var = self.expect(TokenType.IDENTIFIANT, "Expected local var name after `setl`")
+        val = self._parse_value("local variable")
+        return { "type":"set", "scope":"local", "name":var.value, "value":val }
 
     def send_INSTRUCTION(self):
-        msg = self.expect(TokenType.STRING, "Message attendu après `send`")
-        ch  = self.expect(TokenType.NUMBER, "ID de channel attendu après le message")
-        return {
-            "type": "send",
-            "message": msg.value,
-            "channel_id": ch.value
-        }
+        msg = self._parse_value("message or var")
+        ch  = self._parse_value("channel ID or var")
+        return { "type":"send", "message":msg, "channel":ch }
 
     def react_INSTRUCTION(self):
-        emoji = self.expect(TokenType.STRING, "Emoji attendu après `react`")
-        mid   = self.expect(TokenType.NUMBER, "ID de message attendu après l'emoji")
-        return {
-            "type": "react",
-            "emoji": emoji.value,
-            "message_id": mid.value
-        }
+        emoji = self.expect(TokenType.STRING, "Emoji expected")
+        mid   = self._parse_value("message ID or var")
+        return { "type":"react", "emoji":emoji.value, "message":mid }
+
 
     def role_INSTRUCTION(self):
         op   = self.expect(TokenType.OPERATOR,   "Opérateur `:` attendu")
         fn   = self.expect(TokenType.IDENTIFIANT, "Fonction attendue : `add` ou `remove`")
-        mem  = self.expect(TokenType.NUMBER,     "ID de membre attendu")
-        rid  = self.expect(TokenType.NUMBER,     "ID de rôle attendu")
+        mem  = self._parse_value("ID de membre attendu")
+        rid  = self._parse_value("ID de rôle attendu")
         return {
             "type":     "role",
             "function": fn.value,
-            "member":   mem.value,
-            "role":     rid.value
+            "member":   mem,
+            "role":     rid
         }
 
     def embed_INSTRUCTION(self):
-        op = self.expect(TokenType.OPERATOR, "Expected `:` operator")
-        fn = self.expect(TokenType.IDENTIFIANT,
-                         "Expected function name: `create`, `conf`, `set_author`, `set_thumbails`, `add_l`, `add_nl`, `set_footer`, `send`")
+        self.expect(TokenType.OPERATOR, "Expected ':' after embed")
+        fn_tok = self.expect(TokenType.IDENTIFIANT,
+                             "Embed function expected (create, conf, …)")
+        fn = fn_tok.value
+        name_tok = self.expect(TokenType.IDENTIFIANT, "Embed name expected")
+        buf = name_tok.value
 
-        embed_name = self.expect(TokenType.IDENTIFIANT, "Expected embed name as first argument")
-
-        if fn.value == "create":
+        base = {
+            "type": "embed",
+            "function": fn,
+            "name": buf
+        }
+        if fn == "create":
+            return base
+        if fn == "conf":
             return {
-                "type": "embed",
-                "function": "create",
-                "name": embed_name.value
+                **base,
+                "title": self._parse_value("embed title"),
+                "url": self._parse_value("embed URL"),
+                "desc": self._parse_value("embed description"),
+                "color": self._parse_value("embed color")
             }
-
-        elif fn.value == "conf":
-            title = self.expect(TokenType.STRING, "Expected title")
-            url = self.expect(TokenType.STRING, "Expected URL")
-            desc = self.expect(TokenType.STRING, "Expected description")
-            color = self.expect(TokenType.STRING, "Expected color hex code")
+        if fn == "set_author":
             return {
-                "type": "embed",
-                "function": "conf",
-                "name": embed_name.value,
-                "title": title.value,
-                "url": url.value,
-                "desc": desc.value,
-                "color": color.value
+                **base,
+                "author_name": self._parse_value("author name"),
+                "author_url": self._parse_value("author URL"),
+                "author_icon": self._parse_value("author icon URL")
             }
-
-        elif fn.value == "set_author":
-            name = self.expect(TokenType.STRING, "Expected author name")
-            url = self.expect(TokenType.STRING, "Expected author URL")
-            icon = self.expect(TokenType.STRING, "Expected icon URL")
+        if fn == "set_thumbnails":
             return {
-                "type": "embed",
-                "function": "set_author",
-                "name": embed_name.value,
-                "author_name": name.value,
-                "author_url": url.value,
-                "author_icon": icon.value
+                **base,
+                "thumbnail_url": self._parse_value("thumbnail URL")
             }
-
-        elif fn.value == "set_thumbails":
-            url = self.expect(TokenType.STRING, "Expected thumbnail URL")
+        if fn in ("add_l", "add_nl"):
             return {
-                "type": "embed",
-                "function": "set_thumbails",
-                "name": embed_name.value,
-                "thumbnail_url": url.value
+                **base,
+                "title": self._parse_value("field title"),
+                "value": self._parse_value("field value"),
+                "inline": (fn == "add_l")
             }
-
-        elif fn.value == "add_l":
-            title = self.expect(TokenType.STRING, "Expected field title")
-            value = self.expect(TokenType.STRING, "Expected field value")
+        if fn == "set_footer":
             return {
-                "type": "embed",
-                "function": "add_l",
-                "name": embed_name.value,
-                "title": title.value,
-                "value": value.value,
-                "inline": True
+                **base,
+                "footer_text": self._parse_value("footer text")
             }
-
-        elif fn.value == "add_nl":
-            title = self.expect(TokenType.STRING, "Expected field title")
-            value = self.expect(TokenType.STRING, "Expected field value")
+        if fn == "send":
             return {
-                "type": "embed",
-                "function": "add_nl",
-                "name": embed_name.value,
-                "title": title.value,
-                "value": value.value,
-                "inline": False
+                **base,
+                "channel": self._parse_value("channel ID")
             }
-
-        elif fn.value == "set_footer":
-            text = self.expect(TokenType.STRING, "Expected footer text")
-            return {
-                "type": "embed",
-                "function": "set_footer",
-                "name": embed_name.value,
-                "footer_text": text.value
-            }
-
-        elif fn.value == "send":
-            channel_id = self.expect(TokenType.NUMBER, "Expected channel ID")
-            return {
-                "type": "embed",
-                "function": "send",
-                "name": embed_name.value,
-                "channel_id": channel_id.value
-            }
-
-        else:
-            raise ParseError(f"Unknown embed function: {fn.value}")
+        raise ParseError(f"Unknown embed function: {fn}")
