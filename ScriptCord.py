@@ -13,6 +13,6 @@ class ScriptCord:
         content = Path(self.script_path).read_text(encoding="utf-8")
         lexer    = Lexer(content)
         parser   = Parser(lexer)
-        nodes    = parser.run()
+        nodes = parser.getNodes()
         interpreter = Interpreter(self.client)
         await interpreter.execute(nodes)
