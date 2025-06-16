@@ -18,6 +18,7 @@ class Parser:
         self.tokens = lexer.tokens
         self.id     = 0
         self.nodes  = []
+        self.run()
 
     @property
     def current(self):
@@ -29,6 +30,9 @@ class Parser:
     def skip_ignorable(self):
         while self.current and self.current.type == TokenType.COMMENT:
             self.advance()
+
+    def getNodes(self):
+        return self.nodes
 
     def expect(self, ttype, msg):
         if not self.current or self.current.type != ttype:
@@ -74,7 +78,14 @@ class Parser:
 
     def set_INSTRUCTION(self):
         var = self.expect(TokenType.IDENTIFIANT, "Variable globale attendue après `set`")
-        val = self.expect(TokenType.STRING,    "Chaîne attendue après nom de variable")
+
+        if self.current.type == TokenType.STRING:
+            val = self.expect(TokenType.STRING, "Chaîne attendue après nom de variable")
+        elif self.current.type == TokenType.NUMBER:
+            val = self.expect(TokenType.NUMBER, "Nombre attendu après nom de variable")
+        else:
+            raise ParseError(f"Unexpected value type for variable `{var.value}`, got {self.current}")
+
         return {
             "type": "set",
             "name": var.value,

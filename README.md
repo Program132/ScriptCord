@@ -1,95 +1,139 @@
 # ScriptCord
 
-[![Downloads](https://img.shields.io/github/downloads/Program132/ScriptCord/total?style=for-the-badge)](https://github.com/Program132/ScriptCord/releases)
-[![Code size](https://img.shields.io/github/languages/code-size/Program132/ScriptCord?style=for-the-badge)](https://github.com/Program132/ScriptCord)
-[![Last Release](https://img.shields.io/github/release/Program132/ScriptCord?style=for-the-badge)](https://github.com/Program132/ScriptCord/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Program132/ScriptCord/total?style=for-the-badge)](https://github.com/Program132/ScriptCord/releases)  
+[![Code Size](https://img.shields.io/github/languages/code-size/Program132/ScriptCord?style=for-the-badge)](https://github.com/Program132/ScriptCord)  
+[![Latest Release](https://img.shields.io/github/release/Program132/ScriptCord?style=for-the-badge)](https://github.com/Program132/ScriptCord/releases/latest)  
 
-# 🔥 Introduction
-ScriptCord is a scripting language designed to simplify the creation of Discord bots using an intuitive and accessible syntax. It allows users to define commands, send messages, add reactions, manage roles, and create embeds.
+---
 
-# 🛠 Installation
-Before getting started, make sure you have Python 3.8+ installed and install the required dependencies:
+## 🔥 Introduction
 
-```
-git clone https://github.com/your-repo/ScriptCord.git
+**ScriptCord** is a tiny DSL (domain-specific language) that lets you drive Discord bots without writing `discord.py` boilerplate:  
+- Send messages & reactions  
+- Manage roles  
+- Build rich embeds  
+- Auto-detect server & channels if you don’t specify a `GUILD`  
+
+---
+
+## 🛠 Installation
+
+```bash
+git clone https://github.com/Program132/ScriptCord.git
 cd ScriptCord
 pip install -r requirements.txt
 ```
 
-# ⚙️ Language Syntax
-
-## 🚀 Create a Command
-A script can be set as a command by assigning values to the global variables COMMAND_NAME, DESCRIPTION, and ALIASES.
-- COMMAND_NAME is the name of the command.
-- DESCRIPTION is the command's description.
-- ALIASES represents alternative names for the command, separated by commas.
-
-IMPORTANT: Command names and aliases must not contain spaces.
-
+Create a config.json with your bot token:
 ```
-config COMMAND
-set COMMAND_NAME "hello"
-set DESCRIPTION "Sends a welcome message"
-set ALIASES "hi, greetings"
+{
+  "token": "YOUR_DISCORD_BOT_TOKEN"
+}
 ```
 
-## ✉️ Send a Message to a Channel
-Specify the message and the channel ID where the message should be sent.
+## 🚀 Quickstart
+Write a .sc script (see “Syntax” below).
 
-```
-send "Welcome to the server!" 123456789012345678
+In your main.py, wrap everything in ScriptCord:
+```python
+import json
+import discord
+from ScriptCord import ScriptCord
+
+# 1. Load token
+with open("config.json") as f:
+    cfg = json.load(f)
+
+# 2. Create Discord client
+intents = discord.Intents.default()
+client  = discord.Client(intents=intents)
+
+# 3. Instantiate runner
+runner = ScriptCord(client, "my_script.sc")
+
+@client.event
+async def on_ready():
+    print(f"Bot is ready: {client.user}")
+    await runner.run()
+
+client.run(cfg["token"])
 ```
 
-## 😀 Add a Reaction
-Specify the emoji (wrapped in quotes) and the message ID where the reaction should be placed.
-
+## ⚙️ Script Syntax
+Each script must start with a config directive on line 1:
 ```
-react ":smile:" 987654321098765432
+config DEFAULT   # or `config COMMAND`
+```
+- `DEFAULT` scripts run immediately when you ask to.
+- `COMMAND` scripts define a slash/prefix command (not covered currently, coming soon, like events).
+
+### DEFAULT Configuration
+
+You can set the current GUILD where you want to bot search channels, messages etc. if you don't the bot will search everywhere the bot is so it can be very long.
+```
+set GUILD 123456789012345678
 ```
 
-## 🔰 Add/Remove a Role to a Member
-Specify the action (add or remove), the member ID, and the role ID.
+### COMMAND Configuration (COMING SOON)
 
+Required variables:
+- COMMAND_NAME
+- DESCRIPTION
+
+Optional variables:
+- ALIASES
+- 
+
+## Send a message
 ```
-role:add 111222333444555666 777888999000111222
+send "Hello, world!" 987654321098765432
+```
+
+## React to a message
+```
+react "👍" 987654321098765432
+```
+
+## Manage roles
+```
+role:add    111222333444555666 777888999000111222
 role:remove 111222333444555666 777888999000111222
 ```
 
-## 📌 Create and Send Embeds
-Embeds allow structured messages with rich formatting in Discord. You can configure their title, description, color, fields, author, thumbnail, footer, and send them.
+## Create & send embeds
 
-1️⃣ Create a new embed:
+- Create embed:
 ```
-embed:create embedName
+embed:create myEmbed
 ```
-
-2️⃣ Configure an embed:
+- Configure title/URL/description/color (hex with #):
 ```
-embed:conf embedName "My Title" "My URL" "My Desc" "My Color"
+embed:conf myEmbed "Title" "https://..." "Description" "#1abc9c"
 ```
-
-3️⃣ Set the author:
+- (Optional) Set author:
 ```
-embed:set_author embedName "Name" "URL" "Icon URL"
+embed:set_author myEmbed "Bot Name" "https://..." "https://.../icon.png"
 ```
-
-4️⃣ Add a thumbnail:
+- (Optional) Set thumbnail:
 ```
-embed:set_thumbails embedName "URL"
+embed:set_thumbails myEmbed "https://.../thumb.png"
 ```
-
-5️⃣ Add fields (inline or non-inline):
+- Add fields, inline or block:
 ```
-embed:add_l embedName "Title" "Value"
-embed:add_nl embedName "Title" "Value"
+embed:add_l  myEmbed "Field Title" "Value"   # inline
+embed:add_nl myEmbed "Field Title" "Value"   # block
 ```
-
-6️⃣ Set the footer:
+- (Optional) Set footer:
 ```
-embed:set_footer embedName "Footer text"
+embed:set_footer myEmbed "Footer text here"
+```
+- Send the embed:
+```
+embed:send myEmbed 987654321098765432
 ```
 
-7️⃣ Send the embed to a channel:
-```
-embed:send embedName 4546545648979165156
-```
+## 🎯 What ScriptCord Handles
+- Auto-detect server & channel from any guild your bot is in.
+- Track where messages were sent, so react is fast (no brute-force scan).
+- Strip # from hex colors before passing to discord.Color.
+- Support for large numeric IDs in set GUILD, send, react, etc.

@@ -1,10 +1,18 @@
-from Lexer import Lexer
-from Parser import Parser
+import json
+import discord
+from ScriptCord import ScriptCord
 
-with open("script.sc", "r", encoding="utf-8") as f:
-    content = f.read()
+with open("config.json", "r") as f:
+    cfg = json.load(f)
 
-lexer = Lexer(content)
-#lexer.debug()
-parser = Parser(lexer)
-parser.run()
+intents = discord.Intents.default()
+client  = discord.Client(intents=intents)
+
+runner = ScriptCord(client, "command_ex.sc")
+
+@client.event
+async def on_ready():
+    print(f"Bot is ready as {client.user}")
+    await runner.run()
+
+client.run(cfg["token"])
