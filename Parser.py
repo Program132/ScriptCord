@@ -8,6 +8,7 @@ INSTRUCTION_HANDLERS = {
     "react":  "react_INSTRUCTION",
     "role":   "role_INSTRUCTION",
     "embed": "embed_INSTRUCTION",
+    "print": "print_INSTRUCTION",
 }
 
 class ParseError(Exception):
@@ -188,3 +189,10 @@ class Parser:
                 "channel": self._parse_value("channel ID")
             }
         raise ParseError(f"Unknown embed function: {fn}")
+
+    def print_INSTRUCTION(self):
+        value = self._parse_value("Print content")
+        return {
+            "type": "print",
+            "value": value
+        }

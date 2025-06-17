@@ -121,3 +121,8 @@ class Interpreter:
                 ch = self.ctx.channel
             await ch.send(embed=e)
             del self.data.embeds[buf]
+
+    async def handle_print(self, n, guild):
+        value = self._resolve(n["value"])
+        if value:
+            print(value)
