@@ -103,15 +103,25 @@ class Parser:
         return { "type":"set", "scope":"local", "name":var.value, "value":val }
 
     def send_INSTRUCTION(self):
-        msg = self._parse_value("message or var")
-        ch  = self._parse_value("channel ID or var")
-        return { "type":"send", "message":msg, "channel":ch }
+        msg = self._parse_value("message or variable")
+        if self.current and self.current.type in (
+                TokenType.STRING,
+                TokenType.NUMBER,
+                TokenType.IDENTIFIANT
+        ):
+            ch = self._parse_value("channel ID or variable")
+        else:
+            ch = None
+        return {
+            "type": "send",
+            "message": msg,
+            "channel": ch
+        }
 
     def react_INSTRUCTION(self):
         emoji = self.expect(TokenType.STRING, "Emoji expected")
         mid   = self._parse_value("message ID or var")
         return { "type":"react", "emoji":emoji.value, "message":mid }
-
 
     def role_INSTRUCTION(self):
         op   = self.expect(TokenType.OPERATOR,   "Opérateur `:` attendu")
