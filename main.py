@@ -5,14 +5,20 @@ from ScriptCord import ScriptCord
 with open("config.json", "r") as f:
     cfg = json.load(f)
 
-intents = discord.Intents.default()
-client  = discord.Client(intents=intents)
+# 1) Définition des intents
+intents = discord.Intents(
+    guilds=True,
+    messages=True,
+    message_content=True
+)
+intents.reactions = True
 
-runner = ScriptCord(client, "ex.sc")
+# 2) Instanciation du bot
+bot = ScriptCord(intents=intents, prefix=";")
 
-@client.event
-async def on_ready():
-    print(f"Bot is ready as {client.user}")
-    await runner.run()
+# 3) Enregistrement des scripts
+bot.register("default.sc")       # scripts DEFAULT
+bot.register("cmd_ping.sc")      # !ping
 
-client.run(cfg["token"])
+# 4) Démarrage
+bot.run(cfg["token"])
