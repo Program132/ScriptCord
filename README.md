@@ -82,7 +82,8 @@ Required variables:
 
 Optional variables:
 - ALIASES
-- 
+- ARGUMENTS
+- GUILD
 
 ## Send a message
 ```
